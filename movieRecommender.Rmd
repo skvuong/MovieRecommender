@@ -2,7 +2,10 @@
 title: "Movie Recommendation System"
 author: "Sam Vuong, Raymond (shanhua) Huang, Carmon Ho, Kyle Murphy"
 date: "June 2020"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
 ---
 
 ## Overview
@@ -49,7 +52,7 @@ The selected dataset include 4 CSV files:
 - tags.csv
 - links.csv
 Due to time constraints in this project, our recommendation system only uses the rating information
-in the “ratings” data file. It does not use the tag information in the tags data file.
+in the ?ratings? data file. It does not use the tag information in the tags data file.
 
 ```{r data_load, warning=FALSE, error=FALSE, echo=FALSE}
 movies<-read.csv("movies.csv", header=TRUE)
@@ -119,7 +122,7 @@ moviesratings %>% group_by(userId) %>% summarise(n=n()) %>%
 
 #2. Rating Distribution Histogram
 moviercount<-moviesratings %>% group_by(rating) %>% summarise(count=n())
-view(moviercount)
+#view(moviercount)
 class(moviercount)
 moviercount<-as.data.frame(moviercount)
 
@@ -170,10 +173,10 @@ Create a dataframe with only 3 columns required for the Recommender model
 
 Convert it as a matrix, then to realRatingMatrix
 Using acast to convert above data as follows:
-       m1  m2   m3   m4
- u1    3   4    2    5
- u2    1   6    5
- u3    4   4    2    5
+?????? m1? m2?? m3?? m4
+ u1??? 3?? 4??? 2??? 5
+ u2??? 1?? 6??? 5
+ u3??? 4?? 4??? 2??? 5
 
 
 ```{r model_data_prep, warning=FALSE, error=FALSE, echo=FALSE}
@@ -194,8 +197,8 @@ rating_matrix <- as(rating_matrix_raw, "realRatingMatrix")
 rating_matrix
 
 # view rating_matrix in other possible ways
-#as(rating_matrix, "list")     # A list
-#as(rating_matrix, "matrix")   # A sparse matrix
+#as(rating_matrix, "list")???? # A list
+#as(rating_matrix, "matrix")?? # A sparse matrix
 head(as(rating_matrix, "data.frame")) # View as a data-frame
 
 # normalize the rating matrix
@@ -212,15 +215,15 @@ head(as(rating_matrix_bin, "data.frame")) # View as a data-frame
 ## Visualize the ratings matrix
 
 Draw an image plot of raw-ratings & normalized ratings
-  A column represents one specific movie and ratings by users
-   are shaded.
-   Note that some items are always rated 'black' by most users
-    while some items are not rated by many users
-     On the other hand a few users always give high ratings
-      as in some cases a series of black dots cut across items
+? A column represents one specific movie and ratings by users
+?? are shaded.
+?? Note that some items are always rated 'black' by most users
+??? while some items are not rated by many users
+???? On the other hand a few users always give high ratings
+????? as in some cases a series of black dots cut across items
 
 ```{r visualize_matrix, warning=FALSE, error=FALSE, echo=FALSE}
-#image(rating_matrix,      main = "Raw Ratings")       
+#image(rating_matrix,      main = "Raw Ratings")?????? 
 #image(rating_matrix_norm, main = "Normalized Ratings")
 ```
 

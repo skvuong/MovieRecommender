@@ -130,7 +130,7 @@ moviesratings %>% group_by(userId) %>% summarise(n=n()) %>%
 
 #2. Rating Distribution Histogram
 moviercount<-moviesratings %>% group_by(rating) %>% summarise(count=n())
-view(moviercount)
+#view(moviercount)
 class(moviercount)
 moviercount<-as.data.frame(moviercount)
 
@@ -167,7 +167,6 @@ top_tags <- tags %>%
   summarise(tag_count = n()) %>%
   arrange(desc(tag_count)) %>%
   slice(1:10)
-
 
 ggplot(top_tags,aes(x=tag,y=tag_count,fill=tag)) + 
   geom_bar(stat = "identity") + 

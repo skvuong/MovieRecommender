@@ -41,6 +41,7 @@ library(data.table)
 library(ggplot2)
 library(ggthemes)
 library(lubridate)
+library(Matrix)
 library(reshape2)
 library(recommenderlab)
 library(scales)
@@ -52,7 +53,7 @@ library(wordcloud)
 #--------------------------------------------------------------------------------------
 #Setting Working Directory
 #--------------------------------------------------------------------------------------
-setwd("C:/Users/Sam/Documents/Project1")
+#setwd("C:/Users/Sam/Documents/Project1")
 
 #--------------------------------------------------------------------------------------
 ############### Reading input CSV data files
@@ -227,8 +228,8 @@ head(as(rating_matrix_bin, "data.frame")) # View as a data-frame
 #    while some items are not rated by many users
 #     On the other hand a few users always give high ratings
 #      as in some cases a series of black dots cut across items
-image(rating_matrix,      main = "Raw Ratings")       
-image(rating_matrix_norm, main = "Normalized Ratings")
+#image(rating_matrix,      main = "Raw Ratings")       
+#image(rating_matrix_norm, main = "Normalized Ratings")
 
 #--------------------------------------------------------------------------------------
 # Create a Recommender model

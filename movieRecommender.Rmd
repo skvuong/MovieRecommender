@@ -1,0 +1,334 @@
+---
+title: "Movie Recommendation System"
+author: "Sam Vuong, Raymond (shanhua) Huang, Carmon Ho, Kyle Murphy"
+date: "June 2020"
+output: html_document
+---
+
+## Overview
+
+In this project, we develop a collaborative filtering recommender (CFR) system for recommending movies. 
+
+If two users share the same interests in the past, e.g. they liked the same movie, they will also have similar tastes in the future.
+
+The collaborative filtering approach considers only user preferences.
+It does not take into account the contents of the items (movies) being recommended.
+
+## Libraries used
+
+The following libraries are used:
+
+```{r libs, warning=FALSE, error=FALSE, message=FALSE}
+library(arules)
+library(caret)
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(ggthemes)
+library(lubridate)
+library(Matrix)
+library(reshape2)
+library(recommenderlab)
+library(scales)
+library(stringr)
+library(stringdist)
+library(tidyverse)
+library(wordcloud)
+```
+
+## Dataset
+
+The data has been collected by GroupLens Research and made available rating data sets from the
+MovieLens web site (http://movielens.org).
+
+The dataset can be found at: http://files.grouplens.org/datasets/movielens/ml-latest-small.zip
+
+The selected dataset include 4 CSV files:
+- movies.csv
+- ratings.csv
+- tags.csv
+- links.csv
+Due to time constraints in this project, our recommendation system only uses the rating information
+in the “ratings” data file. It does not use the tag information in the tags data file.
+
+```{r data_load, warning=FALSE, error=FALSE, echo=FALSE}
+movies<-read.csv("movies.csv", header=TRUE)
+head(movies)
+
+ratings<-read.csv("ratings.csv", header=TRUE)
+head(ratings)
+
+tags<-read.csv("tags.csv", header=TRUE)
+head(tags)
+
+links<-read.csv("links.csv", header=TRUE)
+head(links)
+```
+
+## Data Exploration Analysis
+
+```{r data_exploration, warning=FALSE, error=FALSE, echo=FALSE}
+# Checking data types of data
+str(movies)
+str(ratings)
+str(tags)
+str(links)
+
+# Checking number of movies
+length(unique(movies$movieId))
+length(unique(ratings$movieId))
+
+# Checking number of users
+length(unique(ratings$userId))
+
+# Checking Summary of data
+summary(movies)
+summary(ratings)
+
+# Convert timestamp to date
+ratings <- mutate(ratings, year = year(as_datetime(timestamp, origin="1970-01-01")))
+head(ratings)
+
+# Joining Ratings and Movies dataframes
+moviesratings <- left_join(ratings, movies, by="movieId")
+head(moviesratings)
+str(moviesratings)
+
+# Double checking number of movies
+length(unique(movies$movieId))
+length(unique(ratings$movieId))
+length(unique(moviesratings$movieId))
+
+# Checking Summary of data
+summary(moviesratings)
+```
+
+## Data Visualization
+
+```{r data_visualization, warning=FALSE, error=FALSE, echo=FALSE}
+#1. Users vs. Ratings Distribution
+moviesratings %>% group_by(userId) %>% summarise(n=n()) %>%
+  ggplot(aes(n)) +
+  geom_histogram(color = "white") +
+  scale_x_log10() + 
+  ggtitle("Distribution of Users") +
+  xlab("Number of Ratings") +
+  ylab("Number of Users") + 
+  scale_y_continuous(labels = comma) + 
+  theme_economist()
+
+#2. Rating Distribution Histogram
+moviercount<-moviesratings %>% group_by(rating) %>% summarise(count=n())
+view(moviercount)
+class(moviercount)
+moviercount<-as.data.frame(moviercount)
+
+ggplot(moviercount,aes(x=rating,y=count/1000)) +geom_bar(stat="identity") + 
+  ggtitle("Rating Distribution") + 
+  xlab("Rating") +
+  ylab("# Ratings 1*10^3") +
+  theme_economist()
+
+#3. Rating vs. Year Distribution
+moviesratings %>%
+  ggplot(aes(x=year)) +
+  geom_bar() +
+  xlab("Year") +
+  ylab("Number of Ratings") +
+  scale_y_continuous(labels = comma) + 
+  ggtitle("Rating Distribution Per Year") +
+  theme_economist()
+
+#4. Movie Genres Tag Cloud
+tag_data <- moviesratings %>% select(genres) %>% 
+  group_by(genres) %>% summarise(count = n()) %>% 
+  arrange(desc(count)) %>% as.data.frame()
+
+set.seed(1234)
+wordcloud(words = moviesratings$genres,
+          freq = tag_data$count, min.freq = 1,
+          max.words=30, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+
+#5. vertical bar chart for tags
+top_tags <- tags %>%
+  group_by(tag) %>%
+  summarise(tag_count = n()) %>%
+  arrange(desc(tag_count)) %>%
+  slice(1:10)
+
+ggplot(top_tags,aes(x=tag,y=tag_count,fill=tag)) + 
+  geom_bar(stat = "identity") + 
+  coord_flip() + 
+  ggtitle("Genre Distribution") + 
+  theme(legend.position = "none")
+```
+
+## Data Preparation for Modeling
+
+Create a dataframe with only 3 columns required for the Recommender model
+
+Convert it as a matrix, then to realRatingMatrix
+Using acast to convert above data as follows:
+       m1  m2   m3   m4
+ u1    3   4    2    5
+ u2    1   6    5
+ u3    4   4    2    5
+
+
+```{r model_data_prep, warning=FALSE, error=FALSE, echo=FALSE}
+rating_df <- select(moviesratings, userId, movieId, rating)
+str(rating_df)
+head(rating_df)
+
+rating_df_matrix<-acast(rating_df, userId ~ movieId, value.var = "rating")
+class(rating_df_matrix)
+
+# Convert it into matrix
+rating_matrix_raw<-as.matrix(rating_df_matrix)
+class(rating_matrix_raw)
+
+# Convert it into realRatingMatrix data structure
+# realRatingMatrix is a recommenderlab sparse-matrix like data-structure
+rating_matrix <- as(rating_matrix_raw, "realRatingMatrix")
+rating_matrix
+
+# view rating_matrix in other possible ways
+#as(rating_matrix, "list")     # A list
+#as(rating_matrix, "matrix")   # A sparse matrix
+head(as(rating_matrix, "data.frame")) # View as a data-frame
+
+# normalize the rating matrix
+rating_matrix_norm <- normalize(rating_matrix)
+rating_matrix_norm
+head(as(rating_matrix_norm, "data.frame")) # View as a data-frame
+
+# Can also turn the matrix into a 0-1 binary matrix
+rating_matrix_bin <- binarize(rating_matrix, minRating=2)
+rating_matrix_bin
+head(as(rating_matrix_bin, "data.frame")) # View as a data-frame
+```
+
+## Visualize the ratings matrix
+
+Draw an image plot of raw-ratings & normalized ratings
+  A column represents one specific movie and ratings by users
+   are shaded.
+   Note that some items are always rated 'black' by most users
+    while some items are not rated by many users
+     On the other hand a few users always give high ratings
+      as in some cases a series of black dots cut across items
+
+```{r visualize_matrix, warning=FALSE, error=FALSE, echo=FALSE}
+#image(rating_matrix,      main = "Raw Ratings")       
+#image(rating_matrix_norm, main = "Normalized Ratings")
+```
+
+## Create Recommender model
+
+```{r rec_model, warning=FALSE, error=FALSE, echo=FALSE}
+# Create a Recommender model using UBCF (user-based collaborative filtering)
+rec=Recommender(rating_matrix,method="UBCF",param=list(normalize="Z-score",method="Cosine", nn=5))
+
+# Examine the model we got
+print(rec)
+getModel(rec)$data
+getModel(rec)$nn
+names(getModel(rec))
+```
+
+## Create predictions
+
+```{r rec_predict, warning=FALSE, error=FALSE, echo=FALSE}
+recom <- predict(rec, rating_matrix, type="ratings")
+recom
+
+# Convert all recommendations to list structure. 
+rec_list<-as(recom,"list")
+head(summary(rec_list))
+```
+
+## Check movie recommendations with n users in test data
+
+```{r rec_check, warning=FALSE, error=FALSE, echo=FALSE}
+n_users  <- 5
+n_movies <- 10
+# For the users in test file, one by one
+for ( u in 1:n_users)
+{
+  # Get userid
+  uid  <- u
+
+  # Obtain top n recommendations for the user
+  recom <- predict(rec, rating_matrix[uid], n=n_movies)
+  # Convert it to readable list
+  recom_list <- as(recom, "list")  
+
+  # Obtain movie titles of recommendations from movies dataset
+  rec_movies <- matrix(0,n_movies)
+  for (i in 1:n_movies){
+    rec_movies[i] <- as.character(subset(movies,
+                                  movies$movieId == as.integer(recom_list[[1]][i]))$title)
+  }
+  print(paste("==== Movie Recommendations For User: ", uid, " ===="))
+  print(rec_movies)
+  print("")
+}
+```
+
+## Evaluation
+
+```{r rec_evaluation, warning=FALSE, error=FALSE, echo=FALSE}
+# Take subset of data users with more than 50 ratings
+rating_matrix <- rating_matrix[rowCounts(rating_matrix) >50,]
+rating_matrix
+```
+
+##  Create an Evaluation Scheme
+
+using train/test 80/20 split validation
+with given=5 means with 5 items given scheme
+with goodRating=3 means items with user rating >= 3 are considered positives
+
+```{r eval_scheme, warning=FALSE, error=FALSE, echo=FALSE}
+eval_scheme <- evaluationScheme(rating_matrix,
+                                method="split",train=0.80,k=1,given=5,goodRating=3) 
+eval_scheme
+```
+
+## Perform Evaluation
+
+Compare UBCF algorithm other basic algorithms
+Here we compare the UBCF model (user-based collaborative filtering)
+to the POPULAR model (based on item popularity)
+and the RANDOM model (random recommendations)
+
+```{r eval_topNList, warning=FALSE, error=FALSE, echo=FALSE}
+algorithms <- list(
+  UBCF = list(name = "UBCF", param = NULL),
+  POPULAR = list(name = "POPULAR", param = NULL),
+  RANDOM  = list(name = "RANDOM",  param = NULL)
+)
+
+# Evaluate using top-N recommendation lists
+eval_topNList <- evaluate(eval_scheme,
+                         algorithms,type="topNList",n=c(1,3,5,10,15,20))
+# Print results
+avg(eval_topNList)
+
+# Plot ROC Curse
+plot(eval_topNList, annotate=TRUE, main="ROC Curve")
+
+plot(eval_topNList, "prec/rec", annotate=TRUE, main="Precision-Recall")
+```
+
+```{r eval_ratings, warning=FALSE, error=FALSE, echo=FALSE}
+# Evaluate prediction of missing ratings
+eval_ratings <- evaluate(eval_scheme, algorithms, type="ratings")
+
+# Print results
+avg(eval_ratings)
+
+# Print results
+plot(eval_ratings)
+```
